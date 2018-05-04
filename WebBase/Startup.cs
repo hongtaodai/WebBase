@@ -16,9 +16,8 @@ using System.Reflection;
 using WebBase.Autofac;
 using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
-using WebBase.Filters;
-using Entitys.EntityConfig;
 using WebExtentions.DependencyInjection;
+using WebBase.Filters;
 
 namespace WebBase
 {
@@ -55,15 +54,15 @@ namespace WebBase
             //services.AddDistributedMemoryCache();
             // services.AddMysqlCache(ss => ss.ConnectionString = Configuration.GetConnectionString("Mysql"));
             //添加Session支持
-            // services.AddSession();
+            services.AddSession();
 
             //注册跨域资源共享
             // services.AddCors();
 
-            services.AddSingleton<ErrorFilter>();
+            services.AddSingleton<ExceptionFilter>();
             //替换Controller为服务实现,必须放在 services.AddMvc() 之前
             services.Replace(ServiceDescriptor.Scoped<IControllerActivator, ServiceBasedControllerActivator>());
-            var mvc = services.AddMvc(ss => ss.Filters.AddService<ErrorFilter>())
+            var mvc = services.AddMvc(ss => ss.Filters.AddService<ExceptionFilter>())
                          .AddJsonOptions(ss =>
                          {
                              ss.SerializerSettings.DateFormatHandling = DateFormatHandling.IsoDateFormat;
@@ -83,11 +82,6 @@ namespace WebBase
             //注册EF Core
             string conStr = Configuration.GetConnectionString("Mysql");
 
-
-            services.AddEntityFrameworkMySql();
-            //services.AddDbContext<EntityFrameworkDbContext>(ss => ss.UseMySql(conStr)
-            //                                                        .UseLoggerFactory(LoggerFactory));
-            services.AddDbContextPool<EntityConfig>(ss => ss.UseMySql(conStr).UseLoggerFactory(LoggerFactory));
 
             //如果使用SqlServer，则替换上两句为下面两句
             //services.AddEntityFrameworkSqlServer();
@@ -122,6 +116,7 @@ namespace WebBase
             var loaded = Configuration.GetSection("AutofacLoadPath");
             var v = loaded.GetChildren();
             List<object> sijObjs = new List<object>();
+            serviceInjPart = sijObjs;
             foreach (var item in v)
             {
                 string name = item.Value;
@@ -146,22 +141,25 @@ namespace WebBase
                                       select p;
                             foreach (var sij in all)
                             {
-                                var constuctor = sij.GetConstructors().FirstOrDefault();
-                                if (constuctor == null)
-                                    continue;
+
+                                //var constuctor = sij.GetConstructors().FirstOrDefault();
+                                //if (constuctor == null)
+                                //    continue;
                                 var method = sij.GetMethod("ConfigureService");
                                 if (method == null)
                                     continue;
-                                var pars = constuctor.GetParameters();
+                                //var pars = constuctor.GetParameters();
+                                //var ins = GetParametersObj(pars);
+                                //var sijobj = Activator.CreateInstance(sij, ins);
+                                var factory = ActivatorUtilities.CreateFactory(sij, Type.EmptyTypes);
+                                var sijobj = factory(ServiceProvider, null);
+                                var pars = method.GetParameters();
                                 var ins = GetParametersObj(pars);
-                                var sijobj = Activator.CreateInstance(sij, ins);
-                                pars = method.GetParameters();
-                                ins = GetParametersObj(pars);
                                 if (pars[0].ParameterType == typeof(IServiceCollection))
                                     ins[0] = service;
                                 method.Invoke(sijobj, ins);
                                 sijObjs.Add(sijobj);
-                                serviceInjPart = sijObjs;
+
                             }
                         }
                         catch (Exception ex)
@@ -186,7 +184,8 @@ namespace WebBase
                 app.UseDeveloperExceptionPage();
             }
 
-            app.UseMvc();
+            app.UseStaticFiles();
+            app.UseSession();
 
             IServiceProvider provider = app.ApplicationServices;
             if (serviceInjPart != null)
@@ -204,6 +203,8 @@ namespace WebBase
                     method.Invoke(item, ins);
                 }
             }
+
+            app.UseMvc();
         }
     }
 }

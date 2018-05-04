@@ -1,10 +1,13 @@
 using System;
 using System.Linq;
 using Autofac;
+using Entitys.Interface;
+using Service.EntityConfig;
+using WebExtentions.DependencyInjection;
 
 namespace Service.Config
 {
-    public class Autofac : Module
+    public class Autofac : AutofacBase
     {
         protected override void Load(ContainerBuilder builder)
         {
@@ -15,6 +18,12 @@ namespace Service.Config
                 .AsSelf()
                 .PropertiesAutowired()
                 .InstancePerLifetimeScope();
+
+            builder.RegisterType<EntityConfigContext>()
+                .PropertiesAutowired()
+                .InstancePerLifetimeScope()
+                .AsSelf()
+                .As<IDbPool>();
         }
     }
 }
